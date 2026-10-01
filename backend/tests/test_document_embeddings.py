@@ -4,7 +4,7 @@ from app.services.ingestion.cleaner import clean_text
 from app.services.ingestion.chunker import chunk_text
 
 
-PDF_PATH = "data/uploads/PUBLIC MONEY.pdf"
+PDF_PATH = "backend/data/uploads/PUBLIC MONEY.pdf"
 
 
 def test_public_money_embeddings():

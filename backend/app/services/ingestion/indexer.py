@@ -51,6 +51,16 @@ def index_pdf(file_path: str) -> int:
 
     try:
         with connection.cursor() as cursor:
+            # Remove any existing copy of this document.
+            # chunks are deleted automatically because of ON DELETE CASCADE.
+            cursor.execute(
+                """
+                DELETE FROM documents
+                WHERE filename = %s;
+                """,
+                (pdf_path.name,),
+            )
+
             cursor.execute(
                 """
                 INSERT INTO documents (filename, file_path)
@@ -84,8 +94,7 @@ def index_pdf(file_path: str) -> int:
                         embedding.tolist(),
                     ),
                 )
-
-        connection.commit()
+            connection.commit()
 
     except Exception:
         connection.rollback()

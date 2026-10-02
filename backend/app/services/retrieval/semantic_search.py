@@ -38,7 +38,7 @@ def semantic_search(
                 FROM chunks c
                 JOIN documents d ON c.document_id = d.id
                 WHERE c.embedding IS NOT NULL
-                  AND (%s IS NULL OR c.document_id = %s)
+                  AND (%s::integer IS NULL OR c.document_id = %s)
                 ORDER BY c.embedding <=> %s::vector
                 LIMIT %s;
                 """,

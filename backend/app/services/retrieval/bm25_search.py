@@ -8,17 +8,12 @@ def _tokenize(text: str) -> list[str]:
     return text.lower().split()
 
 
-def bm25_search(query: str, top_k: int = 5) -> list[dict]:
-    """
-    Search document chunks using BM25 lexical matching.
-
-    Args:
-        query: User's search question.
-        top_k: Number of results to return.
-
-    Returns:
-        A list of the highest-scoring chunks.
-    """
+def bm25_search(
+    query: str,
+    top_k: int = 5,
+    document_id: int | None = None,
+) -> list[dict]:
+    """Search chunks lexically, optionally within one document."""
 
     if not query.strip():
         raise ValueError("Query cannot be empty.")
@@ -40,50 +35,38 @@ def bm25_search(query: str, top_k: int = 5) -> list[dict]:
                     c.page_number,
                     c.text
                 FROM chunks c
-                JOIN documents d
-                    ON c.document_id = d.id
+                JOIN documents d ON c.document_id = d.id
                 WHERE c.text IS NOT NULL
+                  AND (%s IS NULL OR c.document_id = %s)
                 ORDER BY c.id;
-                """
+                """,
+                (document_id, document_id),
             )
-
             rows = cursor.fetchall()
-
     finally:
         connection.close()
 
     if not rows:
         return []
 
-    tokenized_corpus = [
-        _tokenize(row[5])
-        for row in rows
-    ]
-
+    tokenized_corpus = [_tokenize(row[5]) for row in rows]
     bm25 = BM25Okapi(tokenized_corpus)
-
-    tokenized_query = _tokenize(query)
-    scores = bm25.get_scores(tokenized_query)
-
+    scores = bm25.get_scores(_tokenize(query))
     ranked_indices = sorted(
         range(len(scores)),
         key=lambda index: scores[index],
         reverse=True,
     )
 
-    results = []
-
-    for index in ranked_indices[:top_k]:
-        row = rows[index]
-
-        results.append({
-            "chunk_id": row[0],
-            "document_id": row[1],
-            "filename": row[2],
-            "chunk_index": row[3],
-            "page_number": row[4],
-            "text": row[5],
+    return [
+        {
+            "chunk_id": rows[index][0],
+            "document_id": rows[index][1],
+            "filename": rows[index][2],
+            "chunk_index": rows[index][3],
+            "page_number": rows[index][4],
+            "text": rows[index][5],
             "bm25_score": float(scores[index]),
-        })
-
-    return results
+        }
+        for index in ranked_indices[:top_k]
+    ]

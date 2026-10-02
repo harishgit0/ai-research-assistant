@@ -7,20 +7,9 @@ def hybrid_search(
     top_k: int = 5,
     retrieval_k: int = 20,
     rrf_k: int = 60,
+    document_id: int | None = None,
 ) -> list[dict]:
-    """
-    Combine semantic and BM25 retrieval using
-    Reciprocal Rank Fusion (RRF).
-
-    Args:
-        query: User's search question.
-        top_k: Number of final results to return.
-        retrieval_k: Number of candidates retrieved by each method.
-        rrf_k: RRF smoothing constant.
-
-    Returns:
-        Hybrid-ranked chunks.
-    """
+    """Combine semantic and BM25 retrieval using Reciprocal Rank Fusion."""
 
     if not query.strip():
         raise ValueError("Query cannot be empty.")
@@ -34,19 +23,18 @@ def hybrid_search(
     semantic_results = semantic_search(
         query,
         top_k=retrieval_k,
+        document_id=document_id,
     )
-
     bm25_results = bm25_search(
         query,
         top_k=retrieval_k,
+        document_id=document_id,
     )
 
     ranked_results = {}
 
-    # Semantic results
     for rank, result in enumerate(semantic_results, start=1):
         chunk_id = result["chunk_id"]
-
         if chunk_id not in ranked_results:
             ranked_results[chunk_id] = {
                 "chunk_id": result["chunk_id"],
@@ -59,15 +47,10 @@ def hybrid_search(
                 "bm25_rank": None,
                 "rrf_score": 0.0,
             }
+        ranked_results[chunk_id]["rrf_score"] += 1 / (rrf_k + rank)
 
-        ranked_results[chunk_id]["rrf_score"] += (
-            1 / (rrf_k + rank)
-        )
-
-    # BM25 results
     for rank, result in enumerate(bm25_results, start=1):
         chunk_id = result["chunk_id"]
-
         if chunk_id not in ranked_results:
             ranked_results[chunk_id] = {
                 "chunk_id": result["chunk_id"],
@@ -80,11 +63,7 @@ def hybrid_search(
                 "bm25_rank": rank,
                 "rrf_score": 0.0,
             }
-
-        ranked_results[chunk_id]["rrf_score"] += (
-            1 / (rrf_k + rank)
-        )
-
+        ranked_results[chunk_id]["rrf_score"] += 1 / (rrf_k + rank)
         ranked_results[chunk_id]["bm25_rank"] = rank
 
     results = sorted(
@@ -92,5 +71,4 @@ def hybrid_search(
         key=lambda result: result["rrf_score"],
         reverse=True,
     )
-
     return results[:top_k]

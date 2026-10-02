@@ -1,5 +1,38 @@
 {
   "version": 1,
-  "description": "Human-annotated retrieval questions. Set relevant_chunk_indices using the chunk inspection command; do not guess labels.",
-  "cases": []
+  "description": "Human-annotated retrieval questions grounded in inspected RAG-Survey.pdf chunks. Relevant indexes are based on the chunk text reviewed on 2026-10-02.",
+  "cases": [
+    {
+      "id": "rag-survey-001",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are the three main steps in a typical RAG question-answering process, and what happens in each step?",
+      "relevant_chunk_indices": [
+        6
+      ]
+    },
+    {
+      "id": "rag-survey-002",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are the main limitations of Naive RAG described in the survey?",
+      "relevant_chunk_indices": [
+        7
+      ]
+    },
+    {
+      "id": "rag-survey-003",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What pre-retrieval and post-retrieval strategies does Advanced RAG use to improve retrieval quality and context?",
+      "relevant_chunk_indices": [
+        9
+      ]
+    },
+    {
+      "id": "rag-survey-004",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does Modular RAG extend earlier RAG paradigms, and what specialized modules does the survey mention?",
+      "relevant_chunk_indices": [
+        10
+      ]
+    }
+  ]
 }

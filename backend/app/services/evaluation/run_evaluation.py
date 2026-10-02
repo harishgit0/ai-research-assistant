@@ -1,9 +1,8 @@
-"""Run a small, human-annotated retrieval evaluation against indexed PDFs.
+"""Compare retrieval stages on a human-annotated PDF question set.
 
 From backend/: PYTHONPATH=. python -m app.services.evaluation.run_evaluation
 Use --list-chunks FILENAME to inspect chunk indexes before annotating the dataset.
 """
-
 import argparse
 import json
 from pathlib import Path
@@ -11,9 +10,13 @@ from statistics import mean
 
 from app.db.connection import get_connection
 from app.services.evaluation.metrics import ndcg_at_k, recall_at_k, reciprocal_rank
+from app.services.retrieval.bm25_search import bm25_search
 from app.services.retrieval.hybrid_search import hybrid_search
+from app.services.retrieval.reranker import Reranker
+from app.services.retrieval.semantic_search import semantic_search
 
 DATASET_PATH = Path(__file__).resolve().parents[3] / "data" / "evaluation" / "retrieval_dataset.json"
+METHODS = ("semantic", "bm25", "hybrid", "reranked")
 
 
 def _document_id(filename: str) -> int | None:
@@ -40,15 +43,26 @@ def _list_chunks(filename: str) -> None:
             rows = cursor.fetchall()
     finally:
         connection.close()
-
     if not rows:
         print(f"No indexed chunks found for {filename!r}.")
         return
     for chunk_index, page_number, text in rows:
-        print(f"\n--- chunk_index={chunk_index}, page={page_number} ---\n{text}\n")
+        print(f"\\n--- chunk_index={chunk_index}, page={page_number} ---\\n{text}\\n")
+
+
+def _score(ranked: list[dict], relevant: set[int], k: int) -> dict:
+    indices = [item["chunk_index"] for item in ranked[:k]]
+    return {
+        "recall_at_k": recall_at_k(indices, relevant, k),
+        "mrr": reciprocal_rank(indices, relevant),
+        "ndcg_at_k": ndcg_at_k(indices, {index: 1.0 for index in relevant}, k),
+        "retrieved_chunk_indices": indices,
+    }
 
 
 def run_evaluation(dataset_path: Path = DATASET_PATH, k: int = 5) -> dict:
+    if k <= 0:
+        raise ValueError("k must be greater than zero.")
     dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
     cases = dataset.get("cases", [])
     if not cases:
@@ -57,55 +71,70 @@ def run_evaluation(dataset_path: Path = DATASET_PATH, k: int = 5) -> dict:
             "after inspecting your indexed PDF chunks with --list-chunks."
         )
 
-    results = []
+    reranker = Reranker()
+    per_method = {method: [] for method in METHODS}
+    case_results = []
+
     for case in cases:
         filename = case["document_filename"]
-        relevant_indices = set(case["relevant_chunk_indices"])
-        if not relevant_indices:
+        relevant = set(case["relevant_chunk_indices"])
+        if not relevant:
             raise ValueError(f"Case {case.get('id', '?')} has no relevant_chunk_indices.")
-
         document_id = _document_id(filename)
         if document_id is None:
             raise ValueError(f"Document {filename!r} is not indexed in PostgreSQL.")
 
-        ranked = hybrid_search(
-            case["question"],
-            top_k=k,
-            retrieval_k=max(k, 20),
-            document_id=document_id,
+        question = case["question"]
+        semantic = semantic_search(question, top_k=k, document_id=document_id)
+        bm25 = bm25_search(question, top_k=k, document_id=document_id)
+        hybrid_candidates = hybrid_search(
+            question, top_k=max(k, 20), retrieval_k=max(k, 20), document_id=document_id
         )
-        retrieved_indices = [item["chunk_index"] for item in ranked]
-        graded_relevance = {index: 1.0 for index in relevant_indices}
-        row = {
-            "id": case.get("id"),
-            "question": case["question"],
-            "recall_at_k": recall_at_k(retrieved_indices, relevant_indices, k),
-            "mrr": reciprocal_rank(retrieved_indices, relevant_indices),
-            "ndcg_at_k": ndcg_at_k(retrieved_indices, graded_relevance, k),
-            "retrieved_chunk_indices": retrieved_indices,
-            "relevant_chunk_indices": sorted(relevant_indices),
+        hybrid = hybrid_candidates[:k]
+        reranked = reranker.rerank(question, hybrid_candidates, top_k=k)
+
+        ranked_by_method = {
+            "semantic": semantic,
+            "bm25": bm25,
+            "hybrid": hybrid,
+            "reranked": reranked,
         }
-        results.append(row)
+        methods_result = {}
+        for method, ranked in ranked_by_method.items():
+            scored = _score(ranked, relevant, k)
+            per_method[method].append(scored)
+            methods_result[method] = scored
+
+        case_results.append({
+            "id": case.get("id"),
+            "question": question,
+            "relevant_chunk_indices": sorted(relevant),
+            "methods": methods_result,
+        })
 
     summary = {
-        "cases": len(results),
+        "cases": len(case_results),
         "k": k,
-        "mean_recall_at_k": mean(row["recall_at_k"] for row in results),
-        "mean_mrr": mean(row["mrr"] for row in results),
-        "mean_ndcg_at_k": mean(row["ndcg_at_k"] for row in results),
-        "results": results,
+        "methods": {
+            method: {
+                "mean_recall_at_k": mean(row["recall_at_k"] for row in rows),
+                "mean_mrr": mean(row["mrr"] for row in rows),
+                "mean_ndcg_at_k": mean(row["ndcg_at_k"] for row in rows),
+            }
+            for method, rows in per_method.items()
+        },
+        "results": case_results,
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     return summary
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate hybrid retrieval on annotated PDF questions.")
+    parser = argparse.ArgumentParser(description="Compare semantic, BM25, hybrid, and reranked retrieval.")
     parser.add_argument("--list-chunks", metavar="FILENAME", help="Print indexed chunk indexes/text for a PDF.")
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH, help="Path to a JSON evaluation dataset.")
-    parser.add_argument("-k", type=int, default=5, help="Cutoff used for Recall@K and NDCG@K (default: 5).")
+    parser.add_argument("-k", type=int, default=5, help="Evaluation cutoff (default: 5).")
     args = parser.parse_args()
-
     if args.k <= 0:
         parser.error("-k must be greater than zero.")
     if args.list_chunks:

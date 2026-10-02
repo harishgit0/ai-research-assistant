@@ -1,36 +1,34 @@
 # Retrieval evaluation
 
-The evaluation runner measures the current **hybrid retrieval** pipeline (semantic + BM25 + reciprocal-rank fusion) against manually annotated relevant chunk indexes. It reports Recall@K, MRR, and NDCG@K. It does not score answer faithfulness or claim quality improvements.
+The evaluation runner compares four retrieval stages against manually annotated relevant chunk indexes:
 
-## Prepare a small gold set
+- **Semantic:** embedding similarity search.
+- **BM25:** lexical retrieval.
+- **Hybrid:** semantic + BM25 combined with reciprocal-rank fusion (RRF).
+- **Reranked:** hybrid candidates reordered by the cross-encoder reranker.
 
-1. Ensure the target PDFs are indexed in your local PostgreSQL database.
-2. From `backend/`, activate the project virtual environment.
-3. Inspect the chunk indexes and text for a document:
+It reports Recall@K, MRR, and NDCG@K per method and per question. It evaluates retrieval ranking—not answer faithfulness, factual correctness, or claim quality.
 
-   ```bash
-   PYTHONPATH=. python -m app.services.evaluation.run_evaluation --list-chunks RAG-Survey.pdf
-   ```
+## Run
 
-4. Edit `backend/data/evaluation/retrieval_dataset.json`. Add question cases and the chunk indexes that genuinely contain evidence needed to answer each question:
+Ensure the target PDF is indexed in your local PostgreSQL database. From `backend/`, activate the project virtual environment, then run:
 
-   ```json
-   {
-     "id": "rag-001",
-     "document_filename": "RAG-Survey.pdf",
-     "question": "What is retrieval-augmented generation?",
-     "relevant_chunk_indices": [2, 3]
-   }
-   ```
+```bash
+PYTHONPATH=. python -m app.services.evaluation.run_evaluation
+```
 
-   The indexes above are illustrative only—verify them against your own indexed PDF before using them as labels. Include multiple relevant chunks when the answer spans passages.
+Use `-k 10` to change the evaluation cutoff, or `--dataset path/to/another.json` to select another dataset.
 
-5. Run the evaluation:
+## Inspect and label chunks
 
-   ```bash
-   PYTHONPATH=. python -m app.services.evaluation.run_evaluation
-   ```
+```bash
+PYTHONPATH=. python -m app.services.evaluation.run_evaluation --list-chunks RAG-Survey.pdf
+```
 
-   Optional: use `-k 10` or `--dataset path/to/another.json`.
+Edit `backend/data/evaluation/retrieval_dataset.json`. Each case contains an ID, indexed document filename, question, and `relevant_chunk_indices`. Assign labels only after reading the chunk text; include multiple relevant chunks when evidence spans passages. Keep the same gold set when comparing pipeline changes.
 
-The runner resolves the document by filename, scopes retrieval to that document, and prints per-question results plus macro averages. Keep the same annotated questions and labels when comparing retrieval changes. The dataset is intentionally empty initially so no ground-truth labels are fabricated.
+## Interpretation
+
+Recall@K measures whether labeled relevant chunks appear in the first K results. MRR rewards an earlier first relevant result; NDCG@K measures ranking quality. With a small manually labeled dataset, treat scores as diagnostic—not general performance guarantees. Expand the dataset with diverse documents and questions before drawing broad conclusions.
+
+The runner loads the reranker for each run and retrieves hybrid candidates up to max(K, 20) before reranking to K results. Semantic, BM25, and hybrid baselines are each evaluated at K.

@@ -30,12 +30,18 @@ class ResearchAssistantService:
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0.")
 
-        retrieval_results = hybrid_search(
-            query=question,
-            retrieval_k=retrieval_k,
-            top_k=retrieval_k,
-            document_id=document_id,
-        )
+        retrieval_kwargs = {
+            "query": question,
+            "retrieval_k": retrieval_k,
+            "top_k": retrieval_k,
+        }
+
+        # Preserve the original call signature for global search.
+        # Pass document_id only when the caller explicitly scopes the query.
+        if document_id is not None:
+            retrieval_kwargs["document_id"] = document_id
+
+        retrieval_results = hybrid_search(**retrieval_kwargs)
 
         if not retrieval_results:
             raise ValueError("No searchable chunks found for the selected document.")

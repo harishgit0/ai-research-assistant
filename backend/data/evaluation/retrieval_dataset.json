@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "description": "Human-annotated retrieval questions grounded in inspected RAG-Survey.pdf chunks. Relevant indexes are based on the chunk text reviewed on 2026-10-02.",
+  "version": 2,
+  "description": "Curated human-annotated retrieval evaluation set for RAG-Survey.pdf. Original four cases retained; additional questions selected from reviewed survey chunks. Relevant chunk indexes require database validation before benchmark use.",
   "cases": [
     {
       "id": "rag-survey-001",
@@ -32,6 +32,266 @@
       "question": "How does Modular RAG extend earlier RAG paradigms, and what specialized modules does the survey mention?",
       "relevant_chunk_indices": [
         10
+      ]
+    },
+    {
+      "id": "rag-survey-005",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are the main goals of pre-retrieval optimization?",
+      "relevant_chunk_indices": [
+        9
+      ]
+    },
+    {
+      "id": "rag-survey-006",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What techniques can optimize a user's query before retrieval?",
+      "relevant_chunk_indices": [
+        9
+      ]
+    },
+    {
+      "id": "rag-survey-007",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What post-retrieval techniques can improve retrieved context?",
+      "relevant_chunk_indices": [
+        9
+      ]
+    },
+    {
+      "id": "rag-survey-008",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "Why is reranking useful in a RAG pipeline?",
+      "relevant_chunk_indices": [
+        9
+      ]
+    },
+    {
+      "id": "rag-survey-009",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does Modular RAG differ from Naive and Advanced RAG?",
+      "relevant_chunk_indices": [
+        10,
+        12
+      ]
+    },
+    {
+      "id": "rag-survey-010",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What role does the Search module play in Modular RAG?",
+      "relevant_chunk_indices": [
+        11
+      ]
+    },
+    {
+      "id": "rag-survey-011",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does RAG-Fusion improve retrieval?",
+      "relevant_chunk_indices": [
+        11
+      ]
+    },
+    {
+      "id": "rag-survey-012",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What is the purpose of a Routing module in Modular RAG?",
+      "relevant_chunk_indices": [
+        12
+      ]
+    },
+    {
+      "id": "rag-survey-013",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does the Rewrite-Retrieve-Read framework work?",
+      "relevant_chunk_indices": [
+        12
+      ]
+    },
+    {
+      "id": "rag-survey-014",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How do Generate-Read and Recite-Read approaches differ?",
+      "relevant_chunk_indices": [
+        12,
+        13
+      ]
+    },
+    {
+      "id": "rag-survey-015",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What is Hypothetical Document Embeddings (HyDE)?",
+      "relevant_chunk_indices": [
+        13,
+        27
+      ]
+    },
+    {
+      "id": "rag-survey-016",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does RAG handle dynamically updated knowledge compared with fine-tuning?",
+      "relevant_chunk_indices": [
+        14
+      ]
+    },
+    {
+      "id": "rag-survey-017",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "Why can splitting PDF tables into chunks damage their usefulness for retrieval?",
+      "relevant_chunk_indices": [
+        20
+      ]
+    },
+    {
+      "id": "rag-survey-018",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How can Text-to-SQL support retrieval from structured tables?",
+      "relevant_chunk_indices": [
+        20,
+        21
+      ]
+    },
+    {
+      "id": "rag-survey-019",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are the tradeoffs between coarse-grained and fine-grained retrieval?",
+      "relevant_chunk_indices": [
+        22,
+        23
+      ]
+    },
+    {
+      "id": "rag-survey-020",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does the Small2Big strategy work?",
+      "relevant_chunk_indices": [
+        24
+      ]
+    },
+    {
+      "id": "rag-survey-021",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How can metadata improve retrieval?",
+      "relevant_chunk_indices": [
+        8,
+        24
+      ]
+    },
+    {
+      "id": "rag-survey-022",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How can query expansion and sub-question planning help complex retrieval?",
+      "relevant_chunk_indices": [
+        26
+      ]
+    },
+    {
+      "id": "rag-survey-023",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What is the difference between sparse retrieval such as BM25 and dense retrieval?",
+      "relevant_chunk_indices": [
+        28
+      ]
+    },
+    {
+      "id": "rag-survey-024",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How do LLMLingua and RECOMP address context compression?",
+      "relevant_chunk_indices": [
+        32
+      ]
+    },
+    {
+      "id": "rag-survey-025",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "Why might a complex reasoning question require iterative retrieval?",
+      "relevant_chunk_indices": [
+        34,
+        35
+      ]
+    },
+    {
+      "id": "rag-survey-026",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does FLARE decide when to retrieve additional information?",
+      "relevant_chunk_indices": [
+        37,
+        38
+      ]
+    },
+    {
+      "id": "rag-survey-027",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are reflection tokens used for in Self-RAG?",
+      "relevant_chunk_indices": [
+        38
+      ]
+    },
+    {
+      "id": "rag-survey-028",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "Which dimensions are important when evaluating RAG systems?",
+      "relevant_chunk_indices": [
+        40,
+        41
+      ]
+    },
+    {
+      "id": "rag-survey-029",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "Which traditional metrics can be used to evaluate retrieval and generated answers?",
+      "relevant_chunk_indices": [
+        45
+      ]
+    },
+    {
+      "id": "rag-survey-030",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What aspects of RAG quality do RAGAS, ARES, and TruLens evaluate?",
+      "relevant_chunk_indices": [
+        45,
+        48
+      ]
+    },
+    {
+      "id": "rag-survey-031",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What advantages can RAG provide over relying only on long-context prompting?",
+      "relevant_chunk_indices": [
+        46,
+        47
+      ]
+    },
+    {
+      "id": "rag-survey-032",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What engineering challenges arise when making RAG systems production-ready?",
+      "relevant_chunk_indices": [
+        49
+      ]
+    },
+    {
+      "id": "rag-survey-033",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What examples demonstrate RAG applications involving images and video?",
+      "relevant_chunk_indices": [
+        51,
+        52
+      ]
+    },
+    {
+      "id": "rag-survey-034",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "How does RBPS use retrieved code examples?",
+      "relevant_chunk_indices": [
+        52
+      ]
+    },
+    {
+      "id": "rag-survey-035",
+      "document_filename": "RAG-Survey.pdf",
+      "question": "What are the three main RAG paradigms described in the survey?",
+      "relevant_chunk_indices": [
+        52
       ]
     }
   ]

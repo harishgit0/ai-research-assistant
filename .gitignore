@@ -23,3 +23,14 @@ backend/data/uploads/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated evaluation artifacts
+backend/evaluation_results*.json
+backend/data/evaluation/*.backup.json
+backend/data/evaluation/*_before_*.json
+
+# Extracted document content
+backend/chunks.txt
+
+# Local source documents
+data/uploads/

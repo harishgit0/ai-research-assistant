@@ -40,9 +40,6 @@ def ndcg_at_k(retrieved: Sequence[T], relevance: Mapping[T, float], k: int) -> f
     if any(score < 0 for score in relevance.values()):
         raise ValueError("Relevance scores must be non-negative.")
 
-    def gain(score: float) -> float:
-        return (2**score - 1) / log2(2 + 0)  # denominator replaced by rank discount below
-
     actual = sum(
         (2**relevance.get(item, 0) - 1) / log2(rank + 1)
         for rank, item in enumerate(retrieved[:k], start=1)

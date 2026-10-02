@@ -2,16 +2,15 @@ from app.db.connection import get_connection
 from app.services.embedding import EmbeddingService
 
 
-def semantic_search(query: str, top_k: int = 5) -> list[dict]:
+def semantic_search(
+    query: str,
+    top_k: int = 5,
+    document_id: int | None = None,
+) -> list[dict]:
     """
     Search stored document chunks using semantic similarity.
 
-    Args:
-        query: User's search question.
-        top_k: Number of results to return.
-
-    Returns:
-        A list of the most semantically similar chunks.
+    When document_id is supplied, restrict retrieval to that document.
     """
 
     if not query.strip():
@@ -21,9 +20,7 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
         raise ValueError("top_k must be greater than 0.")
 
     embedding_service = EmbeddingService()
-
     query_embedding = embedding_service.embed_text(query)
-
     connection = get_connection()
 
     try:
@@ -39,25 +36,24 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
                     c.text,
                     1 - (c.embedding <=> %s::vector) AS similarity
                 FROM chunks c
-                JOIN documents d
-                    ON c.document_id = d.id
+                JOIN documents d ON c.document_id = d.id
                 WHERE c.embedding IS NOT NULL
+                  AND (%s IS NULL OR c.document_id = %s)
                 ORDER BY c.embedding <=> %s::vector
                 LIMIT %s;
                 """,
                 (
                     query_embedding.tolist(),
+                    document_id,
+                    document_id,
                     query_embedding.tolist(),
                     top_k,
                 ),
             )
-
             rows = cursor.fetchall()
 
-        results = []
-
-        for row in rows:
-            results.append({
+        return [
+            {
                 "chunk_id": row[0],
                 "document_id": row[1],
                 "filename": row[2],
@@ -65,9 +61,8 @@ def semantic_search(query: str, top_k: int = 5) -> list[dict]:
                 "page_number": row[4],
                 "text": row[5],
                 "similarity": float(row[6]),
-            })
-
-        return results
-
+            }
+            for row in rows
+        ]
     finally:
         connection.close()

@@ -19,15 +19,14 @@ class ResearchAssistantService:
         question: str,
         retrieval_k: int = 20,
         top_k: int = 5,
+        document_id: int | None = None,
     ) -> dict:
-        """Retrieve evidence, rerank it, and generate an answer."""
+        """Answer using all documents or only the selected document."""
 
         if not question or not question.strip():
             raise ValueError("Question must not be empty.")
-
         if retrieval_k <= 0:
             raise ValueError("retrieval_k must be greater than 0.")
-
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0.")
 
@@ -35,20 +34,19 @@ class ResearchAssistantService:
             query=question,
             retrieval_k=retrieval_k,
             top_k=retrieval_k,
+            document_id=document_id,
         )
+
+        if not retrieval_results:
+            raise ValueError("No searchable chunks found for the selected document.")
 
         reranked_results = self.reranker.rerank(
             query=question,
             results=retrieval_results,
             top_k=top_k,
         )
-
         answer = self.rag_service.generate_answer(
             question=question,
             retrieval_results=reranked_results,
         )
-
-        return {
-            "answer": answer,
-            "sources": reranked_results,
-        }
+        return {"answer": answer, "sources": reranked_results}

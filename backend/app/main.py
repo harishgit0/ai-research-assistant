@@ -111,9 +111,28 @@ def list_documents():
 
 @app.post("/query", response_model=QueryResponse)
 def query_document(request: QueryRequest):
+    if request.document_id is not None:
+        connection = get_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT 1 FROM documents WHERE id = %s;",
+                    (request.document_id,),
+                )
+                document_exists = cursor.fetchone() is not None
+        finally:
+            connection.close()
+
+        if not document_exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document with id {request.document_id} was not found.",
+            )
+
     try:
         result = research_assistant.answer(
             question=request.question,
+            document_id=request.document_id,
         )
 
         sources = [

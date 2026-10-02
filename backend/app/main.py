@@ -2,13 +2,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 
+from app.db.connection import get_connection
 from app.schemas.query import QueryRequest, QueryResponse
 from app.services.generation.gemini_provider import GeminiProvider
 from app.services.generation.rag_service import RAGService
-from app.services.ingestion.pdf import extract_text_from_pdf
-from app.services.ingestion.cleaner import clean_text
-from app.services.ingestion.chunker import chunk_text
+from app.services.ingestion.indexer import index_pdf
 from app.services.research_assistant_service import ResearchAssistantService
+
 app = FastAPI(title="AI Research Assistant")
 
 gemini_provider = GeminiProvider()
@@ -18,7 +18,6 @@ rag_service = RAGService(
 research_assistant = ResearchAssistantService(
     rag_service=rag_service,
 )
-
 
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -39,36 +38,75 @@ async def upload_document(file: UploadFile = File(...)):
             detail="Only PDF files are supported."
         )
 
-    file_path = UPLOAD_DIR / file.filename
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="A filename is required."
+        )
+
+    safe_filename = Path(file.filename).name
+    file_path = UPLOAD_DIR / safe_filename
 
     contents = await file.read()
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded PDF is empty."
+        )
 
     file_path.write_bytes(contents)
 
-    pages = extract_text_from_pdf(str(file_path))
+    try:
+        chunk_count = index_pdf(str(file_path))
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
 
-    chunks = []
-
-    for page in pages:
-        page["text"] = clean_text(
-            page["text"],
-            page_number=page["page_number"]
-        )
-
-        page_chunks = chunk_text(page["text"])
-
-        for chunk in page_chunks:
-            chunks.append({
-                "page_number": page["page_number"],
-                "chunk_index": chunk["chunk_index"],
-                "text": chunk["text"],
-                "token_count": chunk["token_count"],
-            })
     return {
-        "filename": file.filename,
-        "pages": len(pages),
-        "chunks": chunks,
+        "filename": safe_filename,
+        "message": "Document indexed successfully.",
+        "chunks": chunk_count,
     }
+
+
+@app.get("/documents")
+def list_documents():
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    d.id,
+                    d.filename,
+                    COUNT(c.id) AS chunk_count
+                FROM documents d
+                LEFT JOIN chunks c ON c.document_id = d.id
+                GROUP BY d.id, d.filename
+                ORDER BY d.id DESC;
+                """
+            )
+
+            rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row[0],
+                "filename": row[1],
+                "chunk_count": row[2],
+            }
+            for row in rows
+        ]
+    finally:
+        connection.close()
 
 
 @app.post("/query", response_model=QueryResponse)

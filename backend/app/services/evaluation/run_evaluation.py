@@ -129,16 +129,90 @@ def run_evaluation(dataset_path: Path = DATASET_PATH, k: int = 5) -> dict:
     return summary
 
 
+
+def run_rrf_sweep(
+    dataset_path: Path = DATASET_PATH,
+    k: int = 5,
+    rrf_values: list[int] | None = None,
+) -> dict:
+    """Compare RRF constants without changing the production retrieval default."""
+    if k <= 0:
+        raise ValueError("k must be greater than zero.")
+    values = rrf_values or [10, 30, 60, 100]
+    if not values or any(value <= 0 for value in values):
+        raise ValueError("All RRF constants must be greater than zero.")
+
+    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    cases = dataset.get("cases", [])
+    if not cases:
+        raise ValueError(
+            f"No evaluation cases in {dataset_path}. Add questions and relevant_chunk_indices "
+            "after inspecting your indexed PDF chunks with --list-chunks."
+        )
+
+    reranker = Reranker()
+    summaries = {}
+    details = {}
+    for rrf_k in values:
+        hybrid_rows = []
+        reranked_rows = []
+        case_rows = []
+        for case in cases:
+            filename = case["document_filename"]
+            document_id = _document_id(filename)
+            if document_id is None:
+                raise ValueError(f"Document {filename!r} is not indexed in PostgreSQL.")
+            relevant = set(case["relevant_chunk_indices"])
+            if not relevant:
+                raise ValueError(f"Case {case.get('id', '?')} has no relevant_chunk_indices.")
+            candidates = hybrid_search(
+                case["question"],
+                top_k=max(k, 20),
+                retrieval_k=max(k, 20),
+                rrf_k=rrf_k,
+                document_id=document_id,
+            )
+            hybrid = _score(candidates[:k], relevant, k)
+            reranked = _score(reranker.rerank(case["question"], candidates, top_k=k), relevant, k)
+            hybrid_rows.append(hybrid)
+            reranked_rows.append(reranked)
+            case_rows.append({
+                "id": case.get("id"),
+                "relevant_chunk_indices": sorted(relevant),
+                "hybrid": hybrid,
+                "reranked": reranked,
+            })
+
+        summaries[str(rrf_k)] = {
+            method: {
+                "mean_recall_at_k": mean(row["recall_at_k"] for row in rows),
+                "mean_mrr": mean(row["mrr"] for row in rows),
+                "mean_ndcg_at_k": mean(row["ndcg_at_k"] for row in rows),
+            }
+            for method, rows in (("hybrid", hybrid_rows), ("reranked", reranked_rows))
+        }
+        details[str(rrf_k)] = case_rows
+
+    result = {"cases": len(cases), "k": k, "rrf_constants": values,
+              "macro_metrics": summaries, "per_case": details}
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare semantic, BM25, hybrid, and reranked retrieval.")
     parser.add_argument("--list-chunks", metavar="FILENAME", help="Print indexed chunk indexes/text for a PDF.")
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH, help="Path to a JSON evaluation dataset.")
     parser.add_argument("-k", type=int, default=5, help="Evaluation cutoff (default: 5).")
+    parser.add_argument("--rrf-sweep", action="store_true", help="Compare RRF constants 10, 30, 60, and 100.")
+    parser.add_argument("--rrf-values", type=int, nargs="+", default=[10, 30, 60, 100], help="RRF constants used with --rrf-sweep.")
     args = parser.parse_args()
     if args.k <= 0:
         parser.error("-k must be greater than zero.")
     if args.list_chunks:
         _list_chunks(args.list_chunks)
+    elif args.rrf_sweep:
+        run_rrf_sweep(args.dataset, args.k, args.rrf_values)
     else:
         run_evaluation(args.dataset, args.k)
 

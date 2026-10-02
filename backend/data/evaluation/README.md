@@ -17,7 +17,7 @@ Ensure the target PDF is indexed in your local PostgreSQL database. From `backen
 PYTHONPATH=. python -m app.services.evaluation.run_evaluation
 ```
 
-Use `-k 10` to change the evaluation cutoff, or `--dataset path/to/another.json` to select another dataset.
+Use `-k 10` to change the evaluation cutoff, or `--dataset path/to/another.json` to select another dataset.\n\n## RRF parameter experiment\n\nRun an evaluation-only sweep over RRF constants 10, 30, 60, and 100:\n\n```bash\nPYTHONPATH=. python -m app.services.evaluation.run_evaluation --rrf-sweep\n```\n\nTo choose values explicitly, add `--rrf-values 10 30 60 100`. The sweep reports hybrid and reranked metrics for each value; it does not modify the production `hybrid_search` default (`rrf_k=60`). Keep the same labeled cases and cutoff for fair comparison. A four-question dataset is exploratory, so do not treat the apparent top score as a reliable general optimum.
 
 ## Inspect and label chunks
 

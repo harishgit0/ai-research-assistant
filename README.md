@@ -1,260 +1,151 @@
 # AI Research Assistant
 
-An AI-powered research and study assistant built as a portfolio and learning project. The system is designed to explore how modern retrieval-augmented generation (RAG) systems can combine semantic search, BM25, hybrid retrieval, reranking, evidence selection, and evaluation to produce grounded answers from research documents.
+An end-to-end research assistant for asking questions about PDF papers and receiving answers grounded in retrieved passages. It demonstrates document ingestion, local embeddings, semantic and lexical retrieval, hybrid ranking, cross-encoder reranking, source-aware RAG prompts, and retrieval evaluation.
 
-> **Project status:** Early implementation — PDF ingestion, cleaning, token-based chunking, and local embedding generation are currently implemented and tested.
+## Features
 
-## What this project is about
+- Upload and index PDF papers; extract page text, clean it, and chunk it (400 tokens with 75-token overlap).
+- Generate normalized 384-dimensional embeddings with BAAI/bge-small-en-v1.5.
+- Store documents, chunks, and embeddings in PostgreSQL with pgvector.
+- Combine semantic search and BM25 with Reciprocal Rank Fusion (RRF).
+- Rerank candidates with BAAI/bge-reranker-base.
+- Generate grounded answers with Gemini and return source filename, page, chunk index, and text.
+- Search one selected document or the full library; delete indexed documents.
+- Vue 3 frontend for upload, question answering, library management, and evidence inspection.
+- Retrieval evaluation with Recall@K, MRR, and NDCG@K.
 
-The goal is to build an end-to-end research assistant that can answer questions from a user's documents while keeping the retrieval pipeline measurable and explainable.
+## Architecture
 
-The planned pipeline is:
+    PDF -> extraction -> cleaning -> token chunks -> BGE embeddings -> PostgreSQL/pgvector
+    Question -> semantic search + BM25 -> RRF -> cross-encoder reranking
+             -> context builder -> grounded prompt -> Gemini -> answer + source passages
 
-~~~text
-Documents
-   ↓
-PDF / Text Extraction
-   ↓
-Cleaning
-   ↓
-Chunking + Metadata
-   ↓
-Embeddings
-   ↓
-Vector Database (pgvector)
-   ↓
-                    ┌─ Semantic / Vector Search
-User Query → Query ┤
-                    └─ BM25
-                         ↓
-                   Hybrid Retrieval
-                         ↓
-                     Reranking
-                         ↓
-                    Evidence Selection
-                         ↓
-                       Context
-                         ↓
-                         LLM
-                         ↓
-              Answer + Supporting Citations
-~~~
+## Stack
 
-The project will also include a retrieval and generation evaluation layer so that retrieval quality and answer quality can be measured rather than assumed.
+Python 3.12+, FastAPI, Uvicorn, PostgreSQL, pgvector, psycopg, Sentence Transformers, BM25, Google Gen AI SDK, Vue 3, Vite, pytest.
 
-## Current implementation
+## Prerequisites
 
-### PDF ingestion
+- Python 3.12+
+- Node.js 20+ and npm
+- PostgreSQL with pgvector available
+- Gemini API key for generated answers (optional for startup; see mock mode)
 
-- Extracts text page-by-page using pypdf
-- Preserves page numbers as metadata
-- Handles pages with missing text safely
+Embedding and reranker models download from Hugging Face on first use and may require several hundred megabytes of storage and memory.
 
-### Text cleaning
+## Setup
 
-- Normalizes extracted text conservatively
-- Removes isolated formatting artifacts
-- Removes trailing page-number artifacts where appropriate
-- Avoids aggressive cleaning that could remove useful research content
+### 1. Configure environment
 
-### Token-based chunking
+From the repository root:
 
-- Uses tiktoken
-- Default chunk size: **400 tokens**
-- Default overlap: **75 tokens**
-- Returns chunk index, text, and token count
-- Validates that chunk overlap is smaller than chunk size
+    cp .env.example .env
 
-### Embeddings
+Set your database credentials in .env and add GEMINI_API_KEY for real generated answers. Never commit this file. Create the database if needed, for example:
 
-Current embedding model:
+    createdb ai_research_assistant
 
-**BAAI/bge-small-en-v1.5**
+Your PostgreSQL role needs permission to enable the pgvector extension, or an administrator must enable it first.
 
-- 384-dimensional embeddings
-- Runs locally
-- CPU-compatible
-- Retrieval-oriented embedding model
-- Embeddings are normalized for similarity-based retrieval
+### 2. Install backend dependencies
 
-### Testing
+    cd backend
+    python -m venv .venv
+    source .venv/bin/activate
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
 
-The current pipeline has tests covering:
+PowerShell activation: .venv\Scripts\Activate.ps1
 
-- Chunking behavior
-- Embedding dimensionality
-- Multiple-text embedding shape
-- Semantic similarity behavior
-- End-to-end PDF → cleaning → chunking → embedding flow
+### 3. Initialize database
 
-The current sample document produces **6 chunks**, with embeddings of shape **(6, 384)** and normalized vector length approximately **1.0**.
+From backend/ with the virtual environment active:
 
-## Planned retrieval system
+    PYTHONPATH=. python -m app.db.init_db
 
-The retrieval layer will compare and combine multiple retrieval strategies:
+This creates the extension if permitted, the documents and chunks tables, and supporting indexes. It is designed to be repeatable.
 
-### Semantic retrieval
+### 4. Start API
 
-Use vector similarity between the query embedding and document-chunk embeddings stored in PostgreSQL with pgvector.
+From backend/:
 
-### BM25
+    PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-Use lexical retrieval to capture exact terms, names, technical terminology, and keyword-heavy queries that semantic retrieval can miss.
+Open http://127.0.0.1:8000/docs for interactive API docs.
 
-### Hybrid retrieval
+- GET / and GET /health — service and database status
+- GET /documents — indexed documents
+- POST /documents/upload — upload a PDF using multipart field file
+- DELETE /documents/{document_id} — remove a document and its indexed chunks
+- POST /query — ask a question
 
-Combine semantic and lexical retrieval using a measurable fusion strategy rather than relying on one retrieval method alone.
+Example JSON body for POST /query:
 
-### Reranking
+    {
+      "question": "What are the main findings?",
+      "document_id": 1
+    }
 
-A dedicated reranker will reorder the candidate chunks returned by the first-stage retrieval system.
+Use null for document_id to search across all indexed documents.
 
-### Evidence selection
+### 5. Start Vue frontend
 
-The system will retain the most relevant supporting passages and their metadata so that generated answers can be traced back to source chunks and pages.
+Open a second terminal from the repository root:
 
-## Evaluation
+    cd frontend
+    npm install
+    npm run dev
 
-A major goal of this project is to evaluate the retrieval pipeline quantitatively.
+Open http://127.0.0.1:5173. The frontend defaults to API http://127.0.0.1:8000. To change it, create frontend/.env.local containing:
 
-Planned retrieval metrics:
+    VITE_API_BASE_URL=https://your-api-host.example
 
-- Recall@K
-- Precision@K
-- Mean Reciprocal Rank (MRR)
-- NDCG
+Set CORS_ORIGINS in the API environment to include the frontend origin when running outside localhost.
 
-Planned generation/evidence metrics:
+## LLM configuration
 
-- Faithfulness
-- Answer relevance
-- Context relevance
-- Citation correctness
+Gemini is the default provider. Configure GEMINI_API_KEY and optionally GEMINI_MODEL in .env. To test the UI request flow without a key, set:
 
-The project will use evaluation results to compare retrieval approaches and document design decisions instead of claiming improvements without measurement.
+    LLM_PROVIDER=mock
 
-## Tech stack
+Mock mode returns a fixed explanatory response, not an LLM-generated answer. It is for smoke-testing only. Restart the API after changing environment variables.
 
-### Backend
+## Tests
 
-- Python 3.12
-- FastAPI
-- Uvicorn
+From backend/ with the virtual environment active:
 
-### Document processing
+    PYTHONPATH=. pytest
 
-- pypdf
-- tiktoken
+Some integration tests require PostgreSQL and locally downloaded embedding/reranker models. Optional sample-PDF tests skip when the files are absent.
 
-### Retrieval / NLP
+## Retrieval evaluation
 
-- Sentence Transformers
-- BAAI/bge-small-en-v1.5
-- BM25
-- pgvector
-- PostgreSQL
+From backend/:
 
-### Frontend
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation --list-chunks RAG-Survey.pdf
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation --rrf-sweep
 
-- Vue 3
-- CSS
+The evaluation dataset has manually assigned chunk indexes tied to a particular PDF extraction and chunking result. Validate each relevant chunk against the exact indexed PDF before treating metrics as a benchmark. Do not infer gold chunk IDs from question wording. Retrieval metrics measure ranking against supplied labels; they do not independently measure answer faithfulness or factual correctness.
 
-### Testing
+## Limitations
 
-- pytest
+- Uploads are limited to 25 MiB by default; change MAX_UPLOAD_BYTES to adjust the limit.
+- Scanned/image-only PDFs need OCR, which is not included.
+- Models run locally; first use can be slow and memory-intensive.
+- Gemini use is subject to API availability and quotas.
+- This is a portfolio MVP, not a hardened multi-user service. It has no user accounts, per-user document isolation, background indexing queue, OCR, or deployment configuration.
+- Uploaded PDFs are stored locally under backend/data/uploads/; do not expose this directory publicly.
 
-### Planned components
+## Project layout
 
-- Reranker
-- LLM provider abstraction
-- Hybrid retrieval
-- Retrieval evaluation
-- Answer/evidence evaluation
+    backend/app/db/           PostgreSQL connection and schema initialization
+    backend/app/services/     ingestion, retrieval, generation, evaluation
+    backend/app/main.py       FastAPI endpoints
+    backend/tests/            unit and integration tests
+    frontend/src/App.vue      document library, upload, query, source UI
+    frontend/src/style.css    responsive dark interface
+    .env.example              environment template
+    backend/requirements.txt  backend dependencies
 
-## Project structure
-
-~~~text
-ai-research-assistant/
-│
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   └── services/
-│   │       ├── embedding.py
-│   │       └── ingestion/
-│   │           ├── cleaner.py
-│   │           ├── chunker.py
-│   │           └── pdf.py
-│   │
-│   ├── tests/
-│   │   ├── test_chunker.py
-│   │   ├── test_embeddings.py
-│   │   ├── test_embedding_service.py
-│   │   └── test_document_embeddings.py
-│   │
-│   └── data/
-│       └── uploads/
-│
-├── .gitignore
-└── README.md
-~~~
-
-Uploaded documents are intentionally excluded from Git through .gitignore.
-
-## Running the current backend
-
-Create and activate the backend virtual environment:
-
-~~~bash
-cd backend
-source .venv/bin/activate
-~~~
-
-Install the project dependencies as they are added to the project.
-
-Run the current test suite:
-
-~~~bash
-pytest
-~~~
-
-The current implementation is primarily exercised through the test suite while the application architecture is being built incrementally.
-
-## Roadmap
-
-- [x] PDF text extraction
-- [x] Text cleaning
-- [x] Token-based chunking
-- [x] BGE embedding service
-- [x] Embedding and pipeline tests
-- [ ] PostgreSQL + pgvector storage
-- [ ] Vector similarity retrieval
-- [ ] BM25 retrieval
-- [ ] Hybrid retrieval
-- [ ] Reranking
-- [ ] Evidence selection and source metadata
-- [ ] LLM provider abstraction
-- [ ] RAG answer generation
-- [ ] Citation-aware answers
-- [ ] Retrieval evaluation dataset
-- [ ] Retrieval metrics and comparison experiments
-- [ ] Generation/evidence evaluation
-- [ ] Vue 3 research assistant interface
-- [ ] Final documentation and architecture walkthrough
-
-## Why this project?
-
-This project is intentionally built around the internals of a modern RAG system rather than only wrapping an LLM API.
-
-The focus is on understanding and demonstrating:
-
-- How documents become searchable representations
-- Why chunking affects retrieval
-- How semantic and lexical retrieval differ
-- Why hybrid retrieval can be useful
-- What reranking contributes after first-stage retrieval
-- How evidence can be traced to source documents
-- How retrieval quality can be evaluated quantitatively
-- How grounded generation can be tested rather than assumed
-
-The end goal is a technically explainable AI research assistant that can also serve as a practical demonstration of information retrieval, NLP, embeddings, RAG, and evaluation concepts.
+The goal is to demonstrate the internals of a practical RAG system rather than only forwarding prompts to an LLM API: preprocessing, chunking, embedding models, retrieval, fusion, reranking, source attribution, and evaluation.

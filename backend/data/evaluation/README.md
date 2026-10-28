@@ -1,68 +1,50 @@
 # Retrieval evaluation
 
-The evaluation runner compares four retrieval stages against manually annotated relevant chunk indexes:
+The evaluation runner compares four retrieval stages against the chunk labels in retrieval_dataset.json:
 
 - **Semantic:** embedding similarity search.
 - **BM25:** lexical retrieval.
 - **Hybrid:** semantic + BM25 combined with reciprocal-rank fusion (RRF).
 - **Reranked:** hybrid candidates reordered by the cross-encoder reranker.
 
-It reports Recall@K, MRR, and NDCG@K per method and per question. It evaluates retrieval ranking—not answer faithfulness, factual correctness, or claim quality.
+It reports Recall@K, MRR, and NDCG@K per method and per question. It evaluates retrieval ranking against the supplied labels, not answer faithfulness, factual correctness, or claim quality.
 
 ## Run
 
-Ensure the target PDF is indexed in your local PostgreSQL database. From `backend/`, activate the project virtual environment, then run:
+Ensure the target PDF is indexed in your configured PostgreSQL database. From backend/, activate the virtual environment and run:
 
-```bash
-PYTHONPATH=. python -m app.services.evaluation.run_evaluation
-```
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation
 
-Use `-k 10` to change the evaluation cutoff, or `--dataset path/to/another.json` to select another dataset.
+Use -k 10 to change the cutoff, --dataset path/to/another.json to select a dataset, or --rrf-sweep to compare RRF constants.
 
-## Current measured results
+## Dataset status
 
-The current manually labeled dataset contains **4 questions** from `RAG-Survey.pdf`, each with one labeled relevant chunk. At **K=5**, the recorded results are:
+The current JSON dataset contains 35 question cases for RAG-Survey.pdf. Its relevant_chunk_indices are manual labels tied to the exact PDF extraction and chunking output. Before reporting benchmark metrics, validate every labeled index against the actual indexed chunks for the exact document version. Do not infer or change gold chunk IDs based only on question wording.
 
-| Method | Mean Recall@5 | Mean MRR | Mean NDCG@5 |
-|---|---:|---:|---:|
-| Semantic | 0.750 | 0.5833 | 0.6250 |
-| BM25 | 0.750 | 0.7500 | 0.7500 |
-| Hybrid (RRF=60) | 0.750 | 0.6250 | 0.6577 |
-| Reranked | 1.000 | 0.8750 | 0.9077 |
+List the chunks from your local database before reviewing labels:
 
-These are observed results on this small dataset, not general performance guarantees. In particular, a perfect mean Recall@5 here means each of these four labeled chunks appeared in its case's top five; it does not establish broad retrieval reliability.
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation --list-chunks RAG-Survey.pdf
 
-## RRF parameter experiment
+Edit retrieval_dataset.json only after inspecting the matching chunk text. Add multiple relevant chunk indexes when a question requires evidence from more than one passage. Keep the same reviewed label set when comparing retrieval approaches.
 
-Run an evaluation-only sweep over RRF constants 10, 30, 60, and 100:
+## Metrics
 
-```bash
-PYTHONPATH=. python -m app.services.evaluation.run_evaluation --rrf-sweep
-```
+- Recall@K measures the fraction of labeled relevant chunks retrieved in the first K results.
+- MRR rewards a higher rank for the first relevant result.
+- NDCG@K measures ranking quality using relevance labels.
 
-To choose values explicitly, add `--rrf-values 10 30 60 100`. The sweep reports hybrid and reranked metrics for each value; it does not modify the production `hybrid_search` default (`rrf_k=60`).
+The current runner uses binary relevant/not-relevant labels for these metrics. Results depend on the document, chunking settings, label quality, and dataset size. Do not treat scores from this dataset as general performance guarantees.
 
-### Observed sweep (K=5, 4 cases)
+The runner retrieves up to max(K, 20) hybrid candidates before reranking. Semantic and BM25 baselines are evaluated at K; hybrid results are evaluated at K; reranked results are produced from the hybrid candidate pool.
 
-| RRF constant | Hybrid Recall@5 | Hybrid MRR | Hybrid NDCG@5 | Reranked MRR | Reranked NDCG@5 |
-|---:|---:|---:|---:|---:|---:|
-| 10 | 0.750 | 0.625 | 0.6577 | 0.875 | 0.9077 |
-| 30 | 0.750 | 0.625 | 0.6577 | 0.875 | 0.9077 |
-| 60 | 0.750 | 0.625 | 0.6577 | 0.875 | 0.9077 |
-| 100 | 0.750 | 0.625 | 0.6577 | 0.875 | 0.9077 |
+## RRF parameter sweep
 
-The top-five aggregate metrics were identical across tested constants. Some lower-ranked candidate ordering changed between settings, but this experiment provides no measured basis to replace the existing RRF=60 default. This is not evidence that the constants are equivalent on other datasets.
+Run:
 
-## Inspect and label chunks
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation --rrf-sweep
 
-```bash
-PYTHONPATH=. python -m app.services.evaluation.run_evaluation --list-chunks RAG-Survey.pdf
-```
+Or provide explicit constants:
 
-Edit `backend/data/evaluation/retrieval_dataset.json`. Each case contains an ID, indexed document filename, question, and `relevant_chunk_indices`. Assign labels only after reading the chunk text; include multiple relevant chunks when evidence spans passages. Keep the same gold set when comparing pipeline changes.
+    PYTHONPATH=. python -m app.services.evaluation.run_evaluation --rrf-sweep --rrf-values 10 30 60 100
 
-## Interpretation and limitations
-
-Recall@K measures whether labeled relevant chunks appear in the first K results. MRR rewards an earlier first relevant result; NDCG@K measures ranking quality. With one relevant chunk per case, these metrics are especially limited in what they say about multi-passage questions.
-
-Expand the dataset with more questions, multiple relevant chunks where appropriate, and diverse documents before drawing broad conclusions. Compare on the same labeled cases and cutoff. The runner retrieves hybrid candidates up to `max(K, 20)` before reranking to K results; semantic, BM25, and hybrid baselines are each evaluated at K.
+The sweep reports hybrid and reranked metrics for each constant and does not change the production default of RRF=60.

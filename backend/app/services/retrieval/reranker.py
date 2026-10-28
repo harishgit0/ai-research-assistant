@@ -5,58 +5,28 @@ MODEL_NAME = "BAAI/bge-reranker-base"
 
 
 class Reranker:
-    """Cross-encoder based document reranker."""
+    """Cross-encoder reranker; the model loads only on first use."""
 
     def __init__(self):
-        self.model = CrossEncoder(MODEL_NAME)
+        self._model = None
 
-    def rerank(
-        self,
-        query: str,
-        results: list[dict],
-        top_k: int = 5,
-    ) -> list[dict]:
-        """
-        Rerank retrieval candidates using a cross-encoder.
+    @property
+    def model(self):
+        if self._model is None:
+            self._model = CrossEncoder(MODEL_NAME)
+        return self._model
 
-        Args:
-            query: User's search query.
-            results: Candidate chunks from retrieval.
-            top_k: Number of final results.
-
-        Returns:
-            Reranked chunks with reranker scores.
-        """
-
-        if not query.strip():
+    def rerank(self, query: str, results: list[dict], top_k: int = 5) -> list[dict]:
+        if not query or not query.strip():
             raise ValueError("Query cannot be empty.")
-
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0.")
-
         if not results:
             return []
-
-        pairs = [
-            (query, result["text"])
-            for result in results
+        scores = self.model.predict([(query, result["text"]) for result in results])
+        ranked = [
+            {**result, "reranker_score": float(score)}
+            for result, score in zip(results, scores)
         ]
-
-        scores = self.model.predict(pairs)
-
-        reranked_results = []
-
-        for result, score in zip(results, scores):
-            reranked_result = {
-                **result,
-                "reranker_score": float(score),
-            }
-
-            reranked_results.append(reranked_result)
-
-        reranked_results.sort(
-            key=lambda result: result["reranker_score"],
-            reverse=True,
-        )
-
-        return reranked_results[:top_k]
+        ranked.sort(key=lambda result: result["reranker_score"], reverse=True)
+        return ranked[:top_k]
